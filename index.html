@@ -189,14 +189,22 @@
             } catch(e) { console.error(e); }
         }
 
-        function handleChainChanged(chainId) {
+        async function handleChainChanged(chainId) {
+            if (window.ethereum) {
+                provider = new ethers.BrowserProvider(window.ethereum);
+                signer = await provider.getSigner();
+            }
+
             const chainKey = Object.keys(CHAINS).find(k => CHAINS[k].id === chainId);
             if(chainKey) {
                 const c = CHAINS[chainKey];
                 document.getElementById('currentChainName').innerText = c.name;
                 document.getElementById('currentChainIcon').src = c.logo;
                 document.getElementById('currentChainIcon').style.display = 'block';
-                if(bridgeSrcChain.id !== chainId) { bridgeSrcChain = c; updateBridgeUI(); }
+                if(bridgeSrcChain.id !== chainId) { 
+                    bridgeSrcChain = c; 
+                    updateBridgeUI(); 
+                }
             } else {
                 document.getElementById('currentChainName').innerText = "Wrong Net";
             }
@@ -250,10 +258,17 @@
         async function fetchBalances() {
             if(!userAddress || !bridgeSrcChain) return;
             try {
-                const contract = new ethers.Contract(bridgeSrcChain.fbomb, ERC20_ABI, signer);
+                document.getElementById('bridgeSrcBalance').innerText = "Bal: ..."; 
+
+                const rpcProvider = new ethers.JsonRpcProvider(bridgeSrcChain.rpc);
+                const contract = new ethers.Contract(bridgeSrcChain.fbomb, ERC20_ABI, rpcProvider);
+                
                 const bal = await contract.balanceOf(userAddress);
                 document.getElementById('bridgeSrcBalance').innerText = "Bal: " + parseFloat(ethers.formatUnits(bal, 18)).toFixed(4);
-            } catch(e) { document.getElementById('bridgeSrcBalance').innerText = "Bal: 0.00"; }
+            } catch(e) { 
+                console.error("Failed to fetch balance:", e); 
+                document.getElementById('bridgeSrcBalance').innerText = "Bal: 0.00"; 
+            }
         }
 
         function updateBridgeUI() {
@@ -263,6 +278,8 @@
             document.getElementById('dstChainName').innerText = bridgeDstChain.name;
             document.getElementById('lzRouteDisplay').innerText = `ID ${bridgeSrcChain.lzId} -> ID ${bridgeDstChain.lzId}`;
             estimateBridgeFees();
+			            fetchBalances(); 
+
         }
 
         async function estimateBridgeFees() {

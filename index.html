@@ -208,7 +208,6 @@
             } else {
                 document.getElementById('currentChainName').innerText = "Wrong Net";
             }
-            fetchBalances();
         }
 
        async function switchNetwork(chainId) {
@@ -256,20 +255,26 @@
         }
 
         async function fetchBalances() {
-            if(!userAddress || !bridgeSrcChain) return;
-            try {
-                document.getElementById('bridgeSrcBalance').innerText = "Bal: ..."; 
-
-                const rpcProvider = new ethers.JsonRpcProvider(bridgeSrcChain.rpc);
-                const contract = new ethers.Contract(bridgeSrcChain.fbomb, ERC20_ABI, rpcProvider);
-                
-                const bal = await contract.balanceOf(userAddress);
-                document.getElementById('bridgeSrcBalance').innerText = "Bal: " + parseFloat(ethers.formatUnits(bal, 18)).toFixed(4);
-            } catch(e) { 
-                console.error("Failed to fetch balance:", e); 
-                document.getElementById('bridgeSrcBalance').innerText = "Bal: 0.00"; 
-            }
+    if (!userAddress || !bridgeSrcChain) return;
+    
+    try {
+        let currentProvider = provider;
+        const net = await provider.getNetwork();
+        
+        if (Number(net.chainId) !== bridgeSrcChain.id) {
+            currentProvider = new ethers.JsonRpcProvider(bridgeSrcChain.rpc);
         }
+
+        const contract = new ethers.Contract(bridgeSrcChain.fbomb, ERC20_ABI, currentProvider);
+        const bal = await contract.balanceOf(userAddress);
+        const formattedBal = parseFloat(ethers.formatUnits(bal, 18)).toFixed(4);
+        
+        document.getElementById('bridgeSrcBalance').innerText = "Bal: " + formattedBal;
+    } catch (e) {
+        console.error("Balance fetch error:", e);
+       
+    }
+}
 
         function updateBridgeUI() {
             document.getElementById('srcChainIcon').src = bridgeSrcChain.logo;
@@ -361,7 +366,6 @@
                 row.onclick = async () => {
                     if(activeModalSide === 'src') {
                         bridgeSrcChain = item;
-                        // Trigger the wallet to change networks immediately
                         if (window.ethereum && userAddress) {
                             await switchNetwork(item.id);
                         }

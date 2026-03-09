@@ -203,12 +203,48 @@
             fetchBalances();
         }
 
-        async function switchNetwork(chainId) {
+       async function switchNetwork(chainId) {
+            const hexChainId = "0x" + chainId.toString(16);
             try {
-                await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: "0x" + chainId.toString(16) }] });
+                await window.ethereum.request({ 
+                    method: 'wallet_switchEthereumChain', 
+                    params: [{ chainId: hexChainId }] 
+                });
+                
                 provider = new ethers.BrowserProvider(window.ethereum);
                 signer = await provider.getSigner();
-            } catch (error) { console.error(error); }
+                
+            } catch (error) { 
+                if (error.code === 4902) {
+                    const chainKey = Object.keys(CHAINS).find(k => CHAINS[k].id === chainId);
+                    const chainData = CHAINS[chainKey];
+                    
+                    if (chainData) {
+                        try {
+                            await window.ethereum.request({
+                                method: 'wallet_addEthereumChain',
+                                params:[{
+                                    chainId: hexChainId,
+                                    chainName: chainData.name,
+                                    rpcUrls: [chainData.rpc],
+                                    nativeCurrency: {
+                                        name: "Native Token",
+                                        symbol: "ETH", 
+                                        decimals: 18
+                                    }
+                                }]
+                            });
+                            
+                            provider = new ethers.BrowserProvider(window.ethereum);
+                            signer = await provider.getSigner();
+                        } catch (addError) {
+                            console.error("Failed to add network:", addError);
+                        }
+                    }
+                } else {
+                    console.error("Failed to switch network:", error); 
+                }
+            }
         }
 
         async function fetchBalances() {
@@ -298,16 +334,23 @@
 
         function closeModal() { document.getElementById('tokenModal').classList.remove('active'); }
 
-        function renderList(list) {
+       function renderList(list) {
             const cont = document.getElementById('modalList');
             cont.innerHTML = "";
             list.forEach(item => {
                 const row = document.createElement('div');
                 row.className = 'modal-token-row';
                 row.innerHTML = `<img src="${item.logo}" style="width:24px;height:24px;border-radius:50%;"> <div style="font-weight:bold">${item.name}</div>`;
-                row.onclick = () => {
-                    if(activeModalSide === 'src') bridgeSrcChain = item;
-                    else bridgeDstChain = item;
+                row.onclick = async () => {
+                    if(activeModalSide === 'src') {
+                        bridgeSrcChain = item;
+                        // Trigger the wallet to change networks immediately
+                        if (window.ethereum && userAddress) {
+                            await switchNetwork(item.id);
+                        }
+                    } else {
+                        bridgeDstChain = item;
+                    }
                     updateBridgeUI();
                     closeModal();
                 };
